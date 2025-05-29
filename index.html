@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Real-Time Question Selection</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .button-container {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background-color: #3498db;
+            color: white;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        button:nth-child(1) { background-color: #2ecc71; }
+        button:nth-child(2) { background-color: #f1c40f; }
+        button:nth-child(3) { background-color: #e67e22; }
+        button:nth-child(4) { background-color: #e74c3c; }
+        button:nth-child(5) { background-color: #95a5a6; }
+
+        #output {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            min-height: 300px;
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            font-family: 'Courier New', Courier, monospace;
+            color: #333;
+        }
+
+        .log-entry {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .log-entry:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            
+            button {
+                width: 100%;
+                margin-bottom: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Pick Questions from 7000</h1>
+    <div class="button-container">
+        <button onclick="selectQuestions(20)">Pick 20 Questions</button>
+        <button onclick="selectQuestions(40)">Pick 40 Questions</button>
+        <button onclick="selectQuestions(100)">Pick 100 Questions</button>
+        <button onclick="selectQuestions(180)">Pick 180 Questions</button>
+        <button onclick="clearOutput()">Clear Log</button>
+    </div>
+    <div id="output">Click a button to start...</div>
+
+    <script>
+        // Simulate a list of 7000 questions
+        const totalQuestions = 7000;
+        const questions = Array(totalQuestions).fill(null).map((_, index) => {
+            if (index % 500 === 0) return ""; // Every 500th question is blank
+            if (index % 100 === 0) return `Q${Math.floor(index / 100)}`; // Some duplicates
+            return `Q${index}`; // Unique questions
+        });
+
+        // History for each target to track selected questions
+        const history = {
+            20: new Set(),
+            40: new Set(),
+            100: new Set(),
+            180: new Set()
+        };
+
+        // Function to log messages
+        function log(message) {
+            const output = document.getElementById("output");
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = message;
+            output.appendChild(entry);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        // Function to clear the output
+        function clearOutput() {
+            const output = document.getElementById("output");
+            output.innerHTML = "Click a button to start...";
+        }
+
+        // Function to simulate a delay (1 second)
+        async function delay() {
+            return new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        // Function to select questions
+        async function selectQuestions(target) {
+            log(`Starting to pick ${target} questions...`);
+            const interval = target / 4; // Jump size
+            let currentPosition = 1; // Start at position 1
+            let selectedCount = 0; // How many picked
+            let selectedQuestions = []; // This group
+
+            while (selectedCount < target) {
+                const question = questions[currentPosition - 1];
+                log(`Position ${currentPosition}: "${question}"`);
+
+                if (question === "" || selectedQuestions.includes(question) || history[target].has(question)) {
+                    log(`- Skipping (blank, already in this group, or picked in a past ${target} cycle)`);
+                    currentPosition++;
+                    if (currentPosition > totalQuestions) {
+                        currentPosition = 1;
+                        log(`- Reached the end, starting over from position 1`);
+                    }
+                } else {
+                    selectedQuestions.push(question);
+                    history[target].add(question); // Add to history for this target
+                    selectedCount++;
+                    log(`- Picked question "${question}" (${selectedCount}/${target} picked)`);
+                    currentPosition += interval;
+                    if (currentPosition > totalQuestions) {
+                        currentPosition = (currentPosition - 1) % totalQuestions + 1;
+                        log(`- Reached the end, wrapping to position ${currentPosition}`);
+                    }
+                }
+
+                // Check if we've run out of unique questions for this target
+                const uniqueQuestions = [...new Set(questions.filter(q => q !== ""))].length;
+                const remainingUnique = uniqueQuestions - history[target].size;
+                if (remainingUnique <= 0) {
+                    log(`No more unique questions to pick for ${target}!`);
+                    log(`Final result: Picked ${selectedCount} questions: [${selectedQuestions.join(", ")}]`);
+                    return;
+                }
+
+                await delay();
+            }
+
+            log(`Done! Picked ${selectedCount} questions: [${selectedQuestions.join(", ")}]`);
+        }
+    </script>
+</body>
+</html>
