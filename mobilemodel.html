@@ -125,32 +125,10 @@
         .tree ul {
             padding-left: 30px;
             list-style: none;
-            position: relative;
-        }
-        
-        .tree ul:before {
-            content: "";
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            left: 15px;
-            width: 2px;
-            background: #e1e5eb;
         }
         
         .tree li {
             padding: 10px 0;
-            position: relative;
-        }
-        
-        .tree li:before {
-            content: "";
-            position: absolute;
-            top: 20px;
-            left: -15px;
-            width: 15px;
-            height: 2px;
-            background: #e1e5eb;
         }
         
         .tree .category {
@@ -225,6 +203,15 @@
             display: inline-block;
         }
         
+        select {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 8px;
+            border: 1px solid var(--secondary-color);
+            margin-bottom: 20px;
+            width: 200px;
+        }
+        
         @media (max-width: 768px) {
             .container {
                 padding: 20px;
@@ -243,6 +230,10 @@
             .tree ul {
                 padding-left: 20px;
             }
+            
+            select {
+                width: 100%;
+            }
         }
     </style>
 </head>
@@ -253,30 +244,51 @@
             <h2>Select Your Difficulty Level</h2>
             <p>Choose the category that matches your current preparation level:</p>
             <div class="button-group">
-                <button class="category-btn" onclick="startCategory('beginner')">Beginner</button>
-                <button class="category-btn" onclick="startCategory('repeater')">Repeater</button>
-                <button class="category-btn" onclick="startCategory('pro')">Pro</button>
+                <button class="category-btn" onclick="selectCategory('regular')">Regular</button>
+                <button class="category-btn" onclick="selectCategory('repeater')">Repeater</button>
+                <button class="category-btn" onclick="selectCategory('crash')">Crash</button>
             </div>
+        </div>
+        <div id="subject-selection" class="hidden">
+            <h2>Select Subject</h2>
+            <p>Choose the subject for your questions:</p>
+            <select id="subject-dropdown" onchange="selectSubject()">
+                <option value="">-- Select Subject --</option>
+                <option value="botany">Botany</option>
+                <option value="zoology">Zoology</option>
+                <option value="chemistry">Chemistry</option>
+                <option value="physics">Physics</option>
+                <option value="all">All Subjects</option>
+            </select>
         </div>
         <div id="tree-container" class="tree hidden">
             <div class="status-info">
-                <span id="set-info">Set: 1/3</span>
+                <span id="set-info">Set: 1</span>
                 <span id="cycle-info">Cycle: 1/3</span>
                 <span id="progress-text">Progress: 0%</span>
             </div>
             <div class="progress-container">
                 <div class="progress-bar" id="progress-bar"></div>
             </div>
-            <div class="set-cycle-info" id="set-cycle-display">Set 1, Cycle 1</div>
-            <div id="tree-content"></div>
+            <div class="set-cycle-info" id="set-cycle-display"></div>
         </div>
         <button id="back-btn" class="back-btn hidden" onclick="goBack()">Back to Categories</button>
     </div>
 
     <script>
-        // Simulated MCQ database (7000+ questions)
-        const totalQuestions = 7000;
-        const allQuestions = Array.from({ length: totalQuestions }, (_, i) => i + 1);
+        // Simulated MCQ database (2500 questions per subject)
+        const QUESTIONS_PER_SUBJECT = 2500;
+        const subjects = ['botany', 'zoology', 'chemistry', 'physics'];
+        function generateQuestions() {
+            const questions = {};
+            subjects.forEach(subject => {
+                const prefix = subject[0].toUpperCase();
+                questions[subject] = Array.from({ length: QUESTIONS_PER_SUBJECT }, (_, i) => `${prefix}${i + 1}`);
+            });
+            return questions;
+        }
+
+        const allQuestions = generateQuestions();
 
         const levels = [
             { name: '20 Questions', count: 20, step: 5 },
@@ -285,136 +297,227 @@
             { name: '180 Questions', count: 180, step: 45 }
         ];
         
+        let currentSubject = '';
         let currentCategory = '';
         let currentSet = 1;
         let currentCycle = 1;
         let currentLevel = 0;
-        let maxSets = 1;
         let maxCycles = 1;
         let usedQuestionIds = new Set();
         let setQuestions = [];
         let treeHtml = '';
+        let cycleComplete = false;
+        let totalQuestions = 0; // Will be set based on subject choice
+        let allQuestionsExhausted = false;
 
-        function startCategory(category) {
+        function selectCategory(category) {
             currentCategory = category;
-            maxSets = category === 'pro' ? 1 : 3;
-            maxCycles = category === 'pro' ? 1 : 3;
+            document.getElementById('category-selection').classList.add('hidden');
+            document.getElementById('subject-selection').classList.remove('hidden');
+        }
+
+        function selectSubject() {
+            const subject = document.getElementById('subject-dropdown').value;
+            if (subject) {
+                currentSubject = subject;
+                startCategory();
+            }
+        }
+
+        function startCategory() {
+            maxCycles = { 'regular': 3, 'repeater': 2, 'crash': 1 }[currentCategory];
             currentSet = 1;
             currentCycle = 1;
             currentLevel = 0;
+            cycleComplete = false;
+            allQuestionsExhausted = false;
             usedQuestionIds.clear();
             setQuestions = [];
-            
-            // Update UI
-            document.getElementById('set-info').textContent = `Set: ${currentSet}/${maxSets}`;
-            document.getElementById('cycle-info').textContent = `Cycle: ${currentCycle}/${maxCycles}`;
-            document.getElementById('set-cycle-display').textContent = `Set ${currentSet}, Cycle ${currentCycle}`;
-            updateProgress();
-            
-            treeHtml = `<ul><li class="category">${category.toUpperCase()}</li><ul>`;
+
+            // Set total questions based on subject
+            totalQuestions = currentSubject === 'all' ? QUESTIONS_PER_SUBJECT * subjects.length : QUESTIONS_PER_SUBJECT;
+
+            // Initialize tree HTML
+            treeHtml = `<ul><li class="category">${currentSubject.toUpperCase()} - ${currentCategory.toUpperCase()}</li><ul>`;
             treeHtml += `<li class="question-count"><button class="level-btn" id="q-20-btn" onclick="displayLevel(0)">20 Questions</button></li>`;
-            
-            document.getElementById('category-selection').classList.add('hidden');
+
+            // Update UI
+            document.getElementById('subject-selection').classList.add('hidden');
             document.getElementById('tree-container').classList.remove('hidden');
             document.getElementById('back-btn').classList.remove('hidden');
-            document.getElementById('tree-content').innerHTML = treeHtml;
+            document.getElementById('tree-container').innerHTML = treeHtml;
+
+            // Update status after rendering tree-container
+            const setInfo = document.getElementById('set-info');
+            const cycleInfo = document.getElementById('cycle-info');
+            const setCycleDisplay = document.getElementById('set-cycle-display');
+            if (setInfo && cycleInfo && setCycleDisplay) {
+                setInfo.textContent = `Set: ${currentSet}`;
+                cycleInfo.textContent = `Cycle: ${currentCycle}/${maxCycles}`;
+                setCycleDisplay.textContent = `Set ${currentSet}, Cycle ${currentCycle}`;
+            }
+            updateProgress();
         }
 
         function displayLevel(levelIndex) {
-            if (currentLevel === levelIndex) {
-                if (currentLevel === 0) {
+            if (currentLevel === levelIndex && (!cycleComplete || levelIndex === 3) && !allQuestionsExhausted) {
+                if (currentLevel === 0 && !cycleComplete) {
                     setQuestions = getSetQuestions();
                 }
 
                 const level = levels[levelIndex];
                 const shuffledIds = shuffleArray([...setQuestions[levelIndex].ids]);
-                
+
                 // Format the IDs for better readability
                 const formattedIds = [];
                 for (let i = 0; i < shuffledIds.length; i += 10) {
                     formattedIds.push(shuffledIds.slice(i, i + 10).join(', '));
                 }
-                
-                treeHtml = treeHtml.slice(0, treeHtml.lastIndexOf('</li>')) + 
+
+                treeHtml = treeHtml.slice(0, treeHtml.lastIndexOf('</li>')) +
                     `<div class="mcq-ids">MCQ IDs:<br>${formattedIds.join('<br>')}</div></li>`;
 
                 currentLevel++;
                 updateProgress();
 
-                if (currentLevel < levels.length) {
+                const setInfo = document.getElementById('set-info');
+                const cycleInfo = document.getElementById('cycle-info');
+                const setCycleDisplay = document.getElementById('set-cycle-display');
+
+                // Check if all questions are exhausted
+                if (usedQuestionIds.size >= totalQuestions) {
+                    allQuestionsExhausted = true;
+                    treeHtml += `</ul></ul>`;
+                    if (setCycleDisplay) {
+                        setCycleDisplay.textContent = "All questions have been displayed!";
+                    }
+                    document.getElementById('tree-container').innerHTML = treeHtml;
+                    return;
+                }
+
+                if (currentLevel < 3 && !cycleComplete) {
                     treeHtml += `<li class="question-count"><button class="level-btn" id="q-${levels[currentLevel].count}-btn" onclick="displayLevel(${currentLevel})">${levels[currentLevel].name}</button></li>`;
-                } else {
+                } else if (currentLevel === 3 && !cycleComplete) {
                     currentCycle++;
                     if (currentCycle > maxCycles) {
-                        currentSet++;
-                        currentCycle = 1;
-                        setQuestions = [];
-                        if (currentSet > maxSets) {
-                            treeHtml += `</ul></ul>`;
-                            document.getElementById('set-cycle-display').textContent = "Completed all sets!";
-                        } else {
-                            currentLevel = 0;
-                            treeHtml += `<li class="question-count"><button class="level-btn" id="q-${levels[currentLevel].count}-btn" onclick="displayLevel(${currentLevel})">${levels[currentLevel].name}</button></li>`;
-                            document.getElementById('set-cycle-display').textContent = `Set ${currentSet}, Cycle ${currentCycle}`;
+                        cycleComplete = true;
+                        treeHtml += `<li class="question-count"><button class="level-btn" id="q-180-btn" onclick="displayLevel(3)">180 Questions</button></li>`;
+                        if (setCycleDisplay) {
+                            setCycleDisplay.textContent = `Set ${currentSet}, 180 Questions`;
                         }
                     } else {
                         currentLevel = 0;
                         treeHtml += `<li class="question-count"><button class="level-btn" id="q-${levels[currentLevel].count}-btn" onclick="displayLevel(${currentLevel})">${levels[currentLevel].name}</button></li>`;
-                        document.getElementById('set-cycle-display').textContent = `Set ${currentSet}, Cycle ${currentCycle}`;
+                        if (setCycleDisplay && cycleInfo) {
+                            setCycleDisplay.textContent = `Set ${currentSet}, Cycle ${currentCycle}`;
+                            cycleInfo.textContent = `Cycle: ${currentCycle}/${maxCycles}`;
+                        }
                     }
-                    
-                    // Update set and cycle info
-                    document.getElementById('set-info').textContent = `Set: ${currentSet}/${maxSets}`;
-                    document.getElementById('cycle-info').textContent = `Cycle: ${currentCycle}/${maxCycles}`;
+                } else if (currentLevel === 4) {
+                    currentSet++;
+                    currentCycle = 1;
+                    cycleComplete = false;
+                    setQuestions = [];
+                    currentLevel = 0;
+                    treeHtml += `<li class="question-count"><button class="level-btn" id="q-${levels[currentLevel].count}-btn" onclick="displayLevel(${currentLevel})">${levels[currentLevel].name}</button></li>`;
+                    if (setCycleDisplay && setInfo && cycleInfo) {
+                        setCycleDisplay.textContent = `Set ${currentSet}, Cycle ${currentCycle}`;
+                        setInfo.textContent = `Set: ${currentSet}`;
+                        cycleInfo.textContent = `Cycle: ${currentCycle}/${maxCycles}`;
+                    }
                 }
 
-                document.getElementById('tree-content').innerHTML = treeHtml;
+                document.getElementById('tree-container').innerHTML = treeHtml;
             }
         }
 
         function updateProgress() {
-            const totalSteps = levels.length * maxCycles * maxSets;
-            const completedSteps = (currentSet - 1) * maxCycles * levels.length + 
-                                  (currentCycle - 1) * levels.length + 
-                                  currentLevel;
-            const progress = Math.round((completedSteps / totalSteps) * 100);
-            
-            document.getElementById('progress-bar').style.width = `${progress}%`;
-            document.getElementById('progress-text').textContent = `Progress: ${progress}%`;
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            if (!progressBar || !progressText) return;
+
+            const progress = Math.round((usedQuestionIds.size / totalQuestions) * 100);
+            progressBar.style.width = `${progress}%`;
+            progressText.textContent = `Progress: ${progress}%`;
         }
 
         function getSetQuestions() {
             if (setQuestions.length > 0) return setQuestions;
+            
             const questions = [];
+            
             for (const level of levels) {
-                let availableQuestions = allQuestions.filter(id => !usedQuestionIds.has(id));
-                if (availableQuestions.length < level.count) {
-                    usedQuestionIds.clear();
-                    availableQuestions = allQuestions;
+                let selected = [];
+                let remainingQuestions = totalQuestions - usedQuestionIds.size;
+                if (remainingQuestions <= 0) break;
+
+                // Adjust the count for the last set if remaining questions are fewer than the level's count
+                const adjustedCount = Math.min(level.count, remainingQuestions);
+
+                if (currentSubject === 'all') {
+                    // Calculate number of questions per subject (balanced distribution)
+                    const numSubjects = subjects.length; // 4 subjects
+                    const questionsPerSubject = Math.floor(adjustedCount / numSubjects);
+                    const remainder = adjustedCount % numSubjects;
+
+                    // Distribute questions across subjects
+                    let subjectCounts = Array(numSubjects).fill(questionsPerSubject);
+                    for (let i = 0; i < remainder; i++) {
+                        subjectCounts[i]++;
+                    }
+
+                    // Select questions from each subject
+                    subjects.forEach((subject, idx) => {
+                        let availableQuestions = allQuestions[subject].filter(id => !usedQuestionIds.has(id));
+                        if (availableQuestions.length < subjectCounts[idx]) {
+                            usedQuestionIds.clear();
+                            availableQuestions = allQuestions[subject];
+                        }
+
+                        // Apply skipping mechanism for this subject
+                        let countForThisSubject = 0;
+                        for (let i = 0; i < availableQuestions.length && countForThisSubject < subjectCounts[idx]; i += level.step) {
+                            selected.push(availableQuestions[i]);
+                            usedQuestionIds.add(availableQuestions[i]);
+                            countForThisSubject++;
+                        }
+                    });
+                } else {
+                    // Use questions from the selected subject
+                    let availableQuestions = allQuestions[currentSubject].filter(id => !usedQuestionIds.has(id));
+                    if (availableQuestions.length < adjustedCount) {
+                        usedQuestionIds.clear();
+                        availableQuestions = allQuestions[currentSubject];
+                    }
+
+                    // Apply skipping mechanism
+                    for (let i = 0; i < availableQuestions.length && selected.length < adjustedCount; i += level.step) {
+                        selected.push(availableQuestions[i]);
+                        usedQuestionIds.add(availableQuestions[i]);
+                    }
                 }
-                const selected = [];
-                for (let i = 0; i < availableQuestions.length && selected.length < level.count; i += level.step) {
-                    selected.push(availableQuestions[i]);
-                    usedQuestionIds.add(availableQuestions[i]);
-                }
+
+                // Shuffle the selected questions for randomness within the level
+                shuffleArray(selected);
                 questions.push({ level: level.name, ids: selected });
             }
             return questions;
         }
 
         function shuffleArray(array) {
-            const newArray = [...array];
-            for (let i = newArray.length - 1; i > 0; i--) {
+            for (let i = array.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
-                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+                [array[i], array[j]] = [array[j], array[i]];
             }
-            return newArray;
+            return array;
         }
-        
+
         function goBack() {
             document.getElementById('category-selection').classList.remove('hidden');
+            document.getElementById('subject-selection').classList.add('hidden');
             document.getElementById('tree-container').classList.add('hidden');
             document.getElementById('back-btn').classList.add('hidden');
+            document.getElementById('subject-dropdown').value = '';
         }
     </script>
 </body>
