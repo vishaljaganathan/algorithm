@@ -249,6 +249,14 @@
                 <button class="category-btn" onclick="selectCategory('crash')">Crash</button>
             </div>
         </div>
+        <div id="class-selection" class="hidden">
+            <h2>Select Your Class</h2>
+            <p>Choose your class (for Regular category):</p>
+            <div class="button-group">
+                <button class="category-btn" onclick="selectClass('Class 11')">Class 11</button>
+                <button class="category-btn" onclick="selectClass('Class 12')">Class 12</button>
+            </div>
+        </div>
         <div id="subject-selection" class="hidden">
             <h2>Select Subject</h2>
             <p>Choose the subject for your questions:</p>
@@ -272,7 +280,7 @@
             </div>
             <div class="set-cycle-info" id="set-cycle-display"></div>
         </div>
-        <button id="back-btn" class="back-btn hidden" onclick="goBack()">Back to Categories</button>
+        <button id="back-btn" class="back-btn hidden" onclick="goBack()">Back</button>
     </div>
 
     <script>
@@ -299,6 +307,7 @@
         
         let currentSubject = '';
         let currentCategory = '';
+        let currentClass = ''; // New variable to store selected class
         let currentSet = 1;
         let currentCycle = 1;
         let currentLevel = 0;
@@ -307,19 +316,34 @@
         let setQuestions = [];
         let treeHtml = '';
         let cycleComplete = false;
-        let totalQuestions = 0; // Will be set based on subject choice
+        let totalQuestions = 0;
         let allQuestionsExhausted = false;
+        let previousStep = 'category'; // Track the previous step for back navigation
 
         function selectCategory(category) {
             currentCategory = category;
             document.getElementById('category-selection').classList.add('hidden');
+            if (category === 'regular') {
+                document.getElementById('class-selection').classList.remove('hidden');
+                previousStep = 'category';
+            } else {
+                document.getElementById('subject-selection').classList.remove('hidden');
+                previousStep = 'category';
+            }
+        }
+
+        function selectClass(className) {
+            currentClass = className;
+            document.getElementById('class-selection').classList.add('hidden');
             document.getElementById('subject-selection').classList.remove('hidden');
+            previousStep = 'class';
         }
 
         function selectSubject() {
             const subject = document.getElementById('subject-dropdown').value;
             if (subject) {
                 currentSubject = subject;
+                previousStep = 'subject';
                 startCategory();
             }
         }
@@ -334,20 +358,20 @@
             usedQuestionIds.clear();
             setQuestions = [];
 
-            // Set total questions based on subject
             totalQuestions = currentSubject === 'all' ? QUESTIONS_PER_SUBJECT * subjects.length : QUESTIONS_PER_SUBJECT;
 
-            // Initialize tree HTML
-            treeHtml = `<ul><li class="category">${currentSubject.toUpperCase()} - ${currentCategory.toUpperCase()}</li><ul>`;
+            let categoryDisplay = currentSubject.toUpperCase() + ' - ' + currentCategory.toUpperCase();
+            if (currentCategory === 'regular' && currentClass) {
+                categoryDisplay += ' (' + currentClass + ')';
+            }
+            treeHtml = `<ul><li class="category">${categoryDisplay}</li><ul>`;
             treeHtml += `<li class="question-count"><button class="level-btn" id="q-20-btn" onclick="displayLevel(0)">20 Questions</button></li>`;
 
-            // Update UI
             document.getElementById('subject-selection').classList.add('hidden');
             document.getElementById('tree-container').classList.remove('hidden');
             document.getElementById('back-btn').classList.remove('hidden');
             document.getElementById('tree-container').innerHTML = treeHtml;
 
-            // Update status after rendering tree-container
             const setInfo = document.getElementById('set-info');
             const cycleInfo = document.getElementById('cycle-info');
             const setCycleDisplay = document.getElementById('set-cycle-display');
@@ -366,16 +390,47 @@
                 }
 
                 const level = levels[levelIndex];
-                const shuffledIds = shuffleArray([...setQuestions[levelIndex].ids]);
+                const ids = setQuestions[levelIndex].ids;
 
-                // Format the IDs for better readability
-                const formattedIds = [];
-                for (let i = 0; i < shuffledIds.length; i += 10) {
-                    formattedIds.push(shuffledIds.slice(i, i + 10).join(', '));
+                let formattedIds = '';
+                if (currentSubject === 'all') {
+                    const groupedIds = { B: [], Z: [], C: [], P: [] };
+                    ids.forEach(id => {
+                        const prefix = id[0];
+                        groupedIds[prefix].push(id);
+                    });
+
+                    for (const prefix in groupedIds) {
+                        groupedIds[prefix].sort((a, b) => {
+                            const numA = parseInt(a.slice(1));
+                            const numB = parseInt(b.slice(1));
+                            return numA - numB;
+                        });
+                    }
+
+                    const subjectNames = { B: 'Botany', Z: 'Zoology', C: 'Chemistry', P: 'Physics' };
+                    const formattedGroups = [];
+                    for (const prefix in groupedIds) {
+                        if (groupedIds[prefix].length > 0) {
+                            const groupIds = [];
+                            for (let i = 0; i < groupedIds[prefix].length; i += 10) {
+                                groupIds.push(groupedIds[prefix].slice(i, i + 10).join(', '));
+                            }
+                            formattedGroups.push(`${subjectNames[prefix]}: ${groupIds.join('<br>')}`);
+                        }
+                    }
+                    formattedIds = formattedGroups.join('<br>');
+                } else {
+                    const shuffledIds = shuffleArray([...ids]);
+                    const formattedIdsArray = [];
+                    for (let i = 0; i < shuffledIds.length; i += 10) {
+                        formattedIdsArray.push(shuffledIds.slice(i, i + 10).join(', '));
+                    }
+                    formattedIds = formattedIdsArray.join('<br>');
                 }
 
                 treeHtml = treeHtml.slice(0, treeHtml.lastIndexOf('</li>')) +
-                    `<div class="mcq-ids">MCQ IDs:<br>${formattedIds.join('<br>')}</div></li>`;
+                    `<div class="mcq-ids">MCQ IDs:<br>${formattedIds}</div></li>`;
 
                 currentLevel++;
                 updateProgress();
@@ -384,7 +439,6 @@
                 const cycleInfo = document.getElementById('cycle-info');
                 const setCycleDisplay = document.getElementById('set-cycle-display');
 
-                // Check if all questions are exhausted
                 if (usedQuestionIds.size >= totalQuestions) {
                     allQuestionsExhausted = true;
                     treeHtml += `</ul></ul>`;
@@ -451,22 +505,18 @@
                 let remainingQuestions = totalQuestions - usedQuestionIds.size;
                 if (remainingQuestions <= 0) break;
 
-                // Adjust the count for the last set if remaining questions are fewer than the level's count
                 const adjustedCount = Math.min(level.count, remainingQuestions);
 
                 if (currentSubject === 'all') {
-                    // Calculate number of questions per subject (balanced distribution)
-                    const numSubjects = subjects.length; // 4 subjects
+                    const numSubjects = subjects.length;
                     const questionsPerSubject = Math.floor(adjustedCount / numSubjects);
                     const remainder = adjustedCount % numSubjects;
 
-                    // Distribute questions across subjects
                     let subjectCounts = Array(numSubjects).fill(questionsPerSubject);
                     for (let i = 0; i < remainder; i++) {
                         subjectCounts[i]++;
                     }
 
-                    // Select questions from each subject
                     subjects.forEach((subject, idx) => {
                         let availableQuestions = allQuestions[subject].filter(id => !usedQuestionIds.has(id));
                         if (availableQuestions.length < subjectCounts[idx]) {
@@ -474,7 +524,6 @@
                             availableQuestions = allQuestions[subject];
                         }
 
-                        // Apply skipping mechanism for this subject
                         let countForThisSubject = 0;
                         for (let i = 0; i < availableQuestions.length && countForThisSubject < subjectCounts[idx]; i += level.step) {
                             selected.push(availableQuestions[i]);
@@ -483,21 +532,18 @@
                         }
                     });
                 } else {
-                    // Use questions from the selected subject
                     let availableQuestions = allQuestions[currentSubject].filter(id => !usedQuestionIds.has(id));
                     if (availableQuestions.length < adjustedCount) {
                         usedQuestionIds.clear();
                         availableQuestions = allQuestions[currentSubject];
                     }
 
-                    // Apply skipping mechanism
                     for (let i = 0; i < availableQuestions.length && selected.length < adjustedCount; i += level.step) {
                         selected.push(availableQuestions[i]);
                         usedQuestionIds.add(availableQuestions[i]);
                     }
                 }
 
-                // Shuffle the selected questions for randomness within the level
                 shuffleArray(selected);
                 questions.push({ level: level.name, ids: selected });
             }
@@ -513,11 +559,41 @@
         }
 
         function goBack() {
-            document.getElementById('category-selection').classList.remove('hidden');
-            document.getElementById('subject-selection').classList.add('hidden');
-            document.getElementById('tree-container').classList.add('hidden');
-            document.getElementById('back-btn').classList.add('hidden');
-            document.getElementById('subject-dropdown').value = '';
+            if (previousStep === 'category') {
+                document.getElementById('category-selection').classList.remove('hidden');
+                document.getElementById('class-selection').classList.add('hidden');
+                document.getElementById('subject-selection').classList.add('hidden');
+                document.getElementById('tree-container').classList.add('hidden');
+                document.getElementById('back-btn').classList.add('hidden');
+                document.getElementById('subject-dropdown').value = '';
+                currentCategory = '';
+                currentClass = '';
+                previousStep = 'category';
+            } else if (previousStep === 'class') {
+                document.getElementById('class-selection').classList.remove('hidden');
+                document.getElementById('subject-selection').classList.add('hidden');
+                document.getElementById('tree-container').classList.add('hidden');
+                document.getElementById('back-btn').classList.remove('hidden');
+                document.getElementById('subject-dropdown').value = '';
+                currentClass = '';
+                previousStep = 'category';
+            } else if (previousStep === 'subject') {
+                if (currentCategory === 'regular') {
+                    document.getElementById('subject-selection').classList.add('hidden');
+                    document.getElementById('tree-container').classList.add('hidden');
+                    document.getElementById('class-selection').classList.remove('hidden');
+                    document.getElementById('back-btn').classList.remove('hidden');
+                    previousStep = 'class';
+                } else {
+                    document.getElementById('subject-selection').classList.add('hidden');
+                    document.getElementById('tree-container').classList.add('hidden');
+                    document.getElementById('category-selection').classList.remove('hidden');
+                    document.getElementById('back-btn').classList.add('hidden');
+                    previousStep = 'category';
+                }
+                document.getElementById('subject-dropdown').value = '';
+                currentSubject = '';
+            }
         }
     </script>
 </body>
